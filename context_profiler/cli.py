@@ -56,11 +56,35 @@ def _render(result: AnalysisResult, top_n: int) -> None:
     help="Model to compute context window usage against.",
 )
 @click.option("--top", "top_n", default=10, show_default=True, help="Number of heaviest messages to show.")
-def main(path: str, model: str, top_n: int) -> None:
+@click.option(
+    "--warn-at",
+    type=float,
+    default=None,
+    help="Print a warning if usage exceeds this percent of the context window.",
+)
+@click.option(
+    "--fail-at",
+    type=float,
+    default=None,
+    help="Exit with status 1 if usage exceeds this percent of the context window (for CI gating).",
+)
+def main(path: str, model: str, top_n: int, warn_at: float | None, fail_at: float | None) -> None:
     """Profile token usage in a conversation export at PATH."""
     conversation = load_conversation(path)
     result = analyze(conversation, model=model)
     _render(result, top_n)
+
+    if fail_at is not None and result.percent_of_window > fail_at:
+        console.print(
+            f"\n[bold red]FAIL[/bold red]: {result.percent_of_window:.1f}% "
+            f"exceeds --fail-at {fail_at}%"
+        )
+        raise SystemExit(1)
+    if warn_at is not None and result.percent_of_window > warn_at:
+        console.print(
+            f"\n[bold yellow]WARNING[/bold yellow]: {result.percent_of_window:.1f}% "
+            f"exceeds --warn-at {warn_at}%"
+        )
 
 
 if __name__ == "__main__":
